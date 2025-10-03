@@ -1,7 +1,16 @@
 package me.akram.bensalem.papperconverter.settings
 
 import com.intellij.openapi.options.Configurable
+import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
+import com.intellij.ui.components.JBLabel
+import com.intellij.util.ui.FormBuilder
+import com.intellij.util.ui.JBUI
+import kotlinx.coroutines.runBlocking
+import me.akram.bensalem.papperconverter.service.PdfOcrService
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
 import javax.swing.*
 
 class PdfOcrConfigurable : Configurable {
@@ -10,90 +19,160 @@ class PdfOcrConfigurable : Configurable {
     private lateinit var includeImages: JCheckBox
     private lateinit var combinePages: JCheckBox
     private lateinit var openAfter: JCheckBox
-    private lateinit var outputModeCombo: JComboBox<PdfOcrSettingsState.OutputMode>
-    private lateinit var overwritePolicyCombo: JComboBox<PdfOcrSettingsState.OverwritePolicy>
-    private lateinit var projectOutputRootField: JTextField
+    private lateinit var outputMarkdown: JCheckBox
+    private lateinit var outputJson: JCheckBox
+    private lateinit var overwritePolicyCombo: JComboBox<String>
     private lateinit var testButton: JButton
 
     override fun getDisplayName(): String = "PDF to Markdown OCR"
 
     override fun createComponent(): JComponent {
         if (panel == null) {
-            val p = JPanel()
-            p.layout = BoxLayout(p, BoxLayout.Y_AXIS)
+            apiKeyField = JPasswordField(30)
+            testButton = JButton("Test Connection")
+            includeImages = JCheckBox("Include images")
+            combinePages = JCheckBox("Combine pages into one file")
+            openAfter = JCheckBox("Open generated files")
+            outputMarkdown = JCheckBox("Output Markdown")
+            outputJson = JCheckBox("Output JSON")
+            overwritePolicyCombo = ComboBox(PdfOcrSettingsState.OverwritePolicy.options)
 
-            apiKeyField = JPasswordField(40)
-            includeImages = JCheckBox("Include images", true)
-            combinePages = JCheckBox("Combine pages into one Markdown file", true)
-            openAfter = JCheckBox("Open Markdown after conversion", true)
-            outputModeCombo = JComboBox(PdfOcrSettingsState.OutputMode.values())
-            overwritePolicyCombo = JComboBox(PdfOcrSettingsState.OverwritePolicy.values())
-            projectOutputRootField = JTextField(40)
-            testButton = JButton("Test connection")
+            val leftColumn = JPanel(GridBagLayout()).apply {
+                val gbc = GridBagConstraints()
 
-            p.add(labeled("API Key", apiKeyField))
-            p.add(includeImages)
-            p.add(combinePages)
-            p.add(openAfter)
-            p.add(labeled("Output Mode", outputModeCombo))
-            p.add(labeled("Overwrite Policy", overwritePolicyCombo))
-            p.add(labeled("Project Output Root (for ProjectOutputRoot mode)", projectOutputRootField))
-            p.add(testButton)
+                gbc.gridx = 0
+                gbc.gridy = 0
+                gbc.anchor = GridBagConstraints.WEST
+                gbc.insets = JBUI.insetsRight(10)
+                add(JBLabel("API Key:"), gbc)
+
+                gbc.gridx = 1
+                gbc.gridy = 0
+                gbc.weightx = 1.0
+                gbc.fill = GridBagConstraints.HORIZONTAL
+                gbc.insets = JBUI.insetsBottom(8)
+                add(apiKeyField, gbc)
+
+                gbc.gridx = 1
+                gbc.gridy = 1
+                gbc.weightx = 0.0
+                gbc.fill = GridBagConstraints.NONE
+                gbc.anchor = GridBagConstraints.WEST
+                gbc.insets = JBUI.emptyInsets()
+                add(testButton, gbc)
+            }
+
+            val rightColumn = JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                add(includeImages)
+                add(Box.createVerticalStrut(8))
+                add(combinePages)
+                add(Box.createVerticalStrut(8))
+                add(openAfter)
+            }
+
+            val topRow = JPanel(GridBagLayout()).apply {
+                val gbc = GridBagConstraints()
+
+                gbc.gridx = 0
+                gbc.gridy = 0
+                gbc.weightx = 1.0
+                gbc.fill = GridBagConstraints.HORIZONTAL
+                gbc.anchor = GridBagConstraints.NORTHWEST
+                gbc.insets = JBUI.insetsRight(30)
+                add(leftColumn, gbc)
+
+                gbc.gridx = 1
+                gbc.weightx = 0.0
+                gbc.fill = GridBagConstraints.NONE
+                gbc.insets = JBUI.emptyInsets()
+                add(rightColumn, gbc)
+            }
 
             testButton.addActionListener {
-                val key = String(apiKeyField.password)
+                val s = PdfOcrSettingsState.getInstance()
+                val typed = String(apiKeyField.password)
+                val key = if (typed == "********") s.apiKey else typed
                 if (key.isBlank()) {
                     Messages.showErrorDialog("Please enter API key before testing.", "PDF OCR")
                 } else {
-                    // For now, just simulate success; the service will do real HTTP in project context
-                    Messages.showInfoMessage("API key looks set. Connection test simulated.", "PDF OCR")
+                    val project = ProjectManager.getInstance().openProjects.firstOrNull()
+                    if (project != null) {
+                        runBlocking {
+                            val result = PdfOcrService.getInstance(project).testConnection(key)
+                            if (!result.ok) {
+                                Messages.showErrorDialog(result.message, "PDF OCR")
+                            } else {
+                                Messages.showInfoMessage(result.message, "PDF OCR")
+                            }
+                        }
+                    }
                 }
             }
 
-            panel = p
+            val outputFormatPanel = JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                add(outputMarkdown)
+                add(Box.createVerticalStrut(4))
+                add(outputJson)
+            }
+
+            panel = FormBuilder.createFormBuilder()
+                .addComponent(topRow)
+                .addVerticalGap(15)
+                .addLabeledComponent(JBLabel("Overwrite Policy:"), overwritePolicyCombo)
+                .addVerticalGap(10)
+                .addLabeledComponent(JBLabel("Output Format:"), outputFormatPanel)
+                .addComponentFillVertically(JPanel(), 0)
+                .panel.apply {
+                    border = JBUI.Borders.empty(10)
+                }
         }
         reset()
         return panel as JPanel
     }
 
-    private fun labeled(label: String, comp: JComponent): JPanel {
-        val p = JPanel()
-        p.layout = BoxLayout(p, BoxLayout.X_AXIS)
-        p.add(JLabel(label))
-        p.add(Box.createHorizontalStrut(8))
-        p.add(comp)
-        return p
-    }
-
     override fun isModified(): Boolean {
         val s = PdfOcrSettingsState.getInstance()
-        val keyChanged = (String(apiKeyField.password).isNotEmpty() != s.hasApiKey()) ||
-            (String(apiKeyField.password).isNotEmpty() && String(apiKeyField.password) != s.apiKey)
+        val typed = String(apiKeyField.password)
+        val keyChanged = when {
+            typed == "********" -> false
+            typed.isEmpty() -> s.hasApiKey()
+            else -> true
+        }
         return keyChanged ||
                 includeImages.isSelected != s.state.includeImages ||
                 combinePages.isSelected != s.state.combinePages ||
                 openAfter.isSelected != s.state.openAfterConvert ||
-                outputModeCombo.selectedItem != s.state.outputMode ||
-                overwritePolicyCombo.selectedItem != s.state.overwritePolicy ||
-                projectOutputRootField.text != (s.state.projectOutputRoot ?: "")
+                outputMarkdown.isSelected != s.state.outputMarkdown ||
+                outputJson.isSelected != s.state.outputJson ||
+                overwritePolicyCombo.selectedIndex != s.state.overwritePolicy.ordinal
     }
 
     override fun apply() {
         val s = PdfOcrSettingsState.getInstance()
-        val key = String(apiKeyField.password)
-        if (key.isNotEmpty()) {
-            s.apiKey = key
-        } else if (!s.hasApiKey()) {
-            s.apiKey = "" // clear if it was previously empty
+        val typed = String(apiKeyField.password)
+        when {
+            typed == "********" -> { /* no change to stored key */ }
+            typed.isNotEmpty() -> {
+                s.apiKey = typed
+            }
+            else -> {
+                s.apiKey = ""
+            }
         }
+
+        // Reflect masked or empty state in the UI field after applying
+        apiKeyField.text = if (s.hasApiKey()) "********" else ""
+
         s.loadState(
             s.state.copy(
                 includeImages = includeImages.isSelected,
                 combinePages = combinePages.isSelected,
                 openAfterConvert = openAfter.isSelected,
-                outputMode = outputModeCombo.selectedItem as PdfOcrSettingsState.OutputMode,
-                overwritePolicy = overwritePolicyCombo.selectedItem as PdfOcrSettingsState.OverwritePolicy,
-                projectOutputRoot = projectOutputRootField.text.ifBlank { null },
+                outputMarkdown = outputMarkdown.isSelected,
+                outputJson = outputJson.isSelected,
+                overwritePolicy = PdfOcrSettingsState.OverwritePolicy.entries[overwritePolicyCombo.selectedIndex],
             )
         )
     }
@@ -104,9 +183,9 @@ class PdfOcrConfigurable : Configurable {
         includeImages.isSelected = s.state.includeImages
         combinePages.isSelected = s.state.combinePages
         openAfter.isSelected = s.state.openAfterConvert
-        outputModeCombo.selectedItem = s.state.outputMode
-        overwritePolicyCombo.selectedItem = s.state.overwritePolicy
-        projectOutputRootField.text = s.state.projectOutputRoot ?: ""
+        outputMarkdown.isSelected = s.state.outputMarkdown
+        outputJson.isSelected = s.state.outputJson
+        overwritePolicyCombo.selectedIndex = s.state.overwritePolicy.ordinal
     }
 
     override fun disposeUIResources() {

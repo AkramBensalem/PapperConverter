@@ -1,5 +1,6 @@
 package me.akram.bensalem.papperconverter.actions
 
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
@@ -8,13 +9,15 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
-import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.application.ApplicationManager
 import kotlinx.coroutines.runBlocking
+import me.akram.bensalem.papperconverter.data.Options
 import me.akram.bensalem.papperconverter.service.PdfOcrService
 import me.akram.bensalem.papperconverter.settings.PdfOcrSettingsState
+import me.akram.bensalem.papperconverter.ui.ConvertPdfDialog
 import me.akram.bensalem.papperconverter.util.IoUtil
 import me.akram.bensalem.papperconverter.util.Notifications
 import java.io.File
@@ -23,6 +26,8 @@ import java.nio.file.Paths
 
 class ConvertPdfToMarkdownAction : AnAction() {
     private val log = Logger.getInstance(ConvertPdfToMarkdownAction::class.java)
+
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
 
     override fun update(e: AnActionEvent) {
         val files = e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY) ?: run {
@@ -47,20 +52,18 @@ class ConvertPdfToMarkdownAction : AnAction() {
         }
 
         val settings = PdfOcrSettingsState.getInstance()
-        val message = buildString {
-            append("Convert ")
-            append(pdfs.size)
-            append(" PDF(s)?\nOutput: ")
-            append(settings.state.outputMode)
-            append("\nOverwrite: ")
-            append(settings.state.overwritePolicy)
-        }
-        val ok = Messages.showYesNoDialog(project, message, "Convert PDF to Markdown", "Convert", "Cancel", null)
-        if (ok != Messages.YES) return
+
+        val dialog = ConvertPdfDialog(project, pdfs.size, settings)
+        if (!dialog.showAndGet()) return
+
+        // Use the selected values from the dialog
+        val overwritePolicy = dialog.selectedOverwritePolicy
+        val outputMarkdown = dialog.outputMarkdown
+        val outputJson = dialog.outputJson
 
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Converting PDFs to Markdown", true) {
             override fun run(indicator: ProgressIndicator) {
-                val service = PdfOcrService.getInstance(project)
+                val service = PdfOcrService.getInstance(e.project ?: return)
                 var successCount = 0
                 var failCount = 0
                 val toRefresh = mutableListOf<File>()
@@ -70,19 +73,31 @@ class ConvertPdfToMarkdownAction : AnAction() {
                     indicator.text = "Converting ${pdf.fileName}"
                     indicator.fraction = (idx.toDouble() / pdfs.size)
                     try {
-                        val outDir = IoUtil.computeOutputDir(project.basePath?.let { Paths.get(it) }, pdf, settings)
-                        val options = PdfOcrService.Options(
+                        val outDir = IoUtil.computeOutputDir(pdf)
+                        val options = Options(
                             includeImages = settings.state.includeImages,
                             combinePages = settings.state.combinePages,
-                            overwritePolicy = settings.state.overwritePolicy,
-                            apiKey = settings.apiKey
+                            overwritePolicy = overwritePolicy,
+                            apiKey = settings.apiKey,
+                            outputMarkdown = outputMarkdown,
+                            outputJson = outputJson
                         )
                         runBlocking {
                             val result = service.convertPdf(pdf, outDir, options)
-                            if (result.error == null && result.markdownFile != null) {
+                            if (result.error == null && result.createdFiles.isNotEmpty()) {
                                 successCount++
-                                if (firstMd == null) firstMd = result.markdownFile
+                                if (firstMd == null) firstMd = result.markdownFile ?: result.jsonFile
                                 result.createdFiles.forEach { toRefresh.add(it.toFile()) }
+
+                                // Move the original PDF file into the output directory
+                                try {
+                                    val targetPdf = outDir.resolve(pdf.fileName)
+                                    java.nio.file.Files.move(pdf, targetPdf, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                                    toRefresh.add(targetPdf.toFile())
+                                    toRefresh.add(pdf.parent.toFile()) // Refresh source directory
+                                } catch (ex: Exception) {
+                                    log.warn("Failed to move PDF $pdf to $outDir", ex)
+                                }
                             } else {
                                 failCount++
                             }
@@ -101,8 +116,14 @@ class ConvertPdfToMarkdownAction : AnAction() {
                 if (successCount == 1 && settings.state.openAfterConvert) {
                     val md = firstMd
                     if (md != null) {
-                        val vf = LocalFileSystem.getInstance().findFileByIoFile(md.toFile())
-                        if (vf != null) FileEditorManager.getInstance(project).openFile(vf, true)
+                        ApplicationManager.getApplication().invokeLater {
+                            if (!project.isDisposed) {
+                                val vf = LocalFileSystem.getInstance().findFileByIoFile(md.toFile())
+                                if (vf != null) {
+                                    FileEditorManager.getInstance(project).openFile(vf, true)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -116,3 +137,4 @@ class ConvertPdfToMarkdownAction : AnAction() {
 private fun VirtualFile.toNioPathOrNull(): Path? = try {
     Paths.get(this.path)
 } catch (_: Exception) { null }
+

@@ -32,19 +32,27 @@ data class OcrResponse(
 
         fun toByteArray(): ByteArray? {
             if (imageBase64 == null) return null
-            return if (imageBase64.startsWith("data:")) {
-                val comma = imageBase64.indexOf(',')
-                if (comma >= 0) {
-                    val meta = imageBase64.substring(5, comma)
-                    val payload = imageBase64.substring(comma + 1)
-                    if (meta.contains(";base64")) Base64.getDecoder().decode(payload) else payload.toByteArray()
+            return try {
+                if (imageBase64.startsWith("data:")) {
+                    val comma = imageBase64.indexOf(',')
+                    if (comma >= 0) {
+                        val meta = imageBase64.substring(5, comma)
+                        val payload = imageBase64.substring(comma + 1)
+                        if (meta.contains(";base64")) Base64.getDecoder().decode(payload) else payload.toByteArray()
+                    } else Base64.getDecoder().decode(imageBase64)
                 } else Base64.getDecoder().decode(imageBase64)
-            } else Base64.getDecoder().decode(imageBase64)
+            } catch (_: IllegalArgumentException) {
+                null
+            }
         }
 
         fun toBufferedImage(): BufferedImage? {
             val data = imageBase64?.substringAfter("base64,", imageBase64) ?: return null
-            val bytes = Base64.getDecoder().decode(data)
+            val bytes = try {
+                Base64.getDecoder().decode(data)
+            } catch (_: IllegalArgumentException) {
+                return null
+            }
             return javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(bytes))
         }
 

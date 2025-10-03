@@ -25,24 +25,10 @@ object IoUtil {
     }
 
     fun computeOutputDir(
-        projectBase: Path?,
         pdf: Path,
-        settings: PdfOcrSettingsState
     ): Path {
         val stem = pdf.nameWithoutExtension
-        return when (settings.state.outputMode) {
-            PdfOcrSettingsState.OutputMode.AlongsidePdf -> pdf.parent.resolve(stem)
-            PdfOcrSettingsState.OutputMode.ProjectOutputRoot -> {
-                val root = settings.state.projectOutputRoot?.let { Path.of(it) }
-                    ?: (projectBase ?: pdf.parent)
-                val rel = try {
-                    (projectBase ?: pdf.parent).relativize(pdf.parent)
-                } catch (_: Exception) {
-                    Path.of("")
-                }
-                root.resolve(rel).resolve(stem)
-            }
-        }
+        return pdf.parent.resolve(stem)
     }
 
     fun ensureDir(dir: Path) {

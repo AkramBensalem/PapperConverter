@@ -21,12 +21,21 @@ dependencies {
         // bundledPlugin("com.intellij.java") // add if needed
     }
 
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("io.ktor:ktor-client-core:3.3.0")
-    implementation("io.ktor:ktor-client-okhttp:3.3.0")
-    implementation("io.ktor:ktor-client-content-negotiation:3.3.0")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:3.3.0")
-    implementation("ch.qos.logback:logback-classic:1.5.18")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0") {
+        exclude(group = "org.slf4j")
+    }
+    implementation("io.ktor:ktor-client-core:3.3.0") {
+        exclude(group = "org.slf4j")
+    }
+    implementation("io.ktor:ktor-client-okhttp:3.3.0") {
+        exclude(group = "org.slf4j")
+    }
+    implementation("io.ktor:ktor-client-content-negotiation:3.3.0") {
+        exclude(group = "org.slf4j")
+    }
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.3.0") {
+        exclude(group = "org.slf4j")
+    }
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 

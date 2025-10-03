@@ -15,16 +15,27 @@ class PdfOcrSettingsState : PersistentStateComponent<PdfOcrSettingsState.State> 
 
     data class State(
         var hasKey: Boolean = false,
-        var outputMode: OutputMode = OutputMode.AlongsidePdf,
-        var projectOutputRoot: String? = null,
         var includeImages: Boolean = true,
         var combinePages: Boolean = true,
         var openAfterConvert: Boolean = true,
         var overwritePolicy: OverwritePolicy = OverwritePolicy.WithSuffix,
+        var outputMarkdown: Boolean = true,
+        var outputJson: Boolean = true,
     )
 
-    enum class OutputMode { AlongsidePdf, ProjectOutputRoot }
-    enum class OverwritePolicy { SkipExisting, Overwrite, WithSuffix }
+    enum class OverwritePolicy(
+        val displayName: String
+    ) {
+        Overwrite("Overwrite"),
+        SkipExisting("Skip Existing"),
+        WithSuffix("With Suffix");
+
+        companion object{
+            val options: Array<String>
+                get() = entries.map { it.displayName }.toTypedArray()
+        }
+
+    }
 
     private var state = State()
 
