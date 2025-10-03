@@ -1,0 +1,28 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>me.akram.bensalem.pdf.ocr</id>
+    <name>PDF to Markdown (OCR)</name>
+    <vendor url="https://example.com">Akram Bensalem</vendor>
+    <description><![CDATA[
+        Converts selected PDF files into Markdown using an OCR API. Provides a Project View context action,
+        a settings page under Tools for API configuration, and notifications with progress and results.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Settings (Application level) -->
+        <applicationConfigurable instance="me.akram.bensalem.papperconverter.settings.PdfOcrConfigurable" id="pdf.ocr.settings" displayName="PDF to Markdown OCR" parentId="tools"/>
+
+        <!-- Notifications -->
+        <notificationGroup id="PdfOcr" displayType="BALLOON" isLogByDefault="true"/>
+    </extensions>
+
+    <actions>
+        <action id="pdf.ocr.ConvertPdfToMarkdownAction" class="me.akram.bensalem.papperconverter.actions.ConvertPdfToMarkdownAction" text="Convert PDF to Markdown" description="Convert selected PDF(s) to Markdown using OCR">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <keyboard-shortcut keymap="Default" first-keystroke="ctrl alt M"/>
+        </action>
+    </actions>
+</idea-plugin>
