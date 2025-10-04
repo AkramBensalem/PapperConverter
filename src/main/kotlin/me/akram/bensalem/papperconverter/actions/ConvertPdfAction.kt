@@ -24,8 +24,8 @@ import java.io.File
 import java.nio.file.Path
 import java.nio.file.Paths
 
-class ConvertPdfToMarkdownAction : AnAction() {
-    private val log = Logger.getInstance(ConvertPdfToMarkdownAction::class.java)
+class ConvertPdfAction : AnAction() {
+    private val log = Logger.getInstance(ConvertPdfAction::class.java)
 
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
 
