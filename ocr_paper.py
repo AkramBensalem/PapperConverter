@@ -2,11 +2,15 @@ from pathlib import Path
 from mistralai import Mistral
 import datauri
 import json
+import os
+from dotenv import load_dotenv
 
-client = Mistral(api_key="PaxK0NtlSya55tqbD4CIzBxCkbFaOiPv")
+load_dotenv()
 
-input_folder = Path("/home/akram/IdeaProjects/XAI/scripts/papers")
-output_folder = Path("/home/akram/IdeaProjects/XAI/scripts/output")
+client = Mistral(api_key=os.getenv("MISTRAL_API_KEY"))
+
+input_folder = Path("./assets")
+output_folder = Path("./output")
 output_folder.mkdir(exist_ok=True)
 
 print("Starting OCR...")
