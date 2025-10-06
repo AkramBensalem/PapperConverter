@@ -1,18 +1,18 @@
-# PDF to Markdown (OCR) IntelliJ Plugin
+# Document Converter Plugin for IntelliJ IDEA (exemple: PDF to Markdown)
 
-An IntelliJ IDEA plugin that converts selected PDF files into Markdown (with images) using an OCR API.
+An IntelliJ IDEA plugin that converts selected documents as PDF files into Markdown (with images) using an OCR API.
 
 Features
 
-- Project View context action: right-click PDF(s) or folder → "Convert PDF to Markdown"
-- Settings page under Tools → "PDF to Markdown OCR" to configure options and API key
+- Project View context action: right-click PDF(s) or folder → "Convert PDF"
+- Settings page under Tools → "Document converter" to configure options and API key
 - Progress indicator, notifications, and auto-opening the generated Markdown
-- Output layout per PDF in its own folder; optional project-root output
+- Output layout per PDF in its own folder
 
 Requirements
 
 - IntelliJ IDEA 2023.3+
-- JBR/Java 17 runtime (configured by Gradle toolchain)
+- JBR/Java 17 runtime
 
 Build & Run
 
@@ -22,16 +22,14 @@ Build & Run
 
 Configuration
 
-- Open Settings/Preferences → Tools → "PDF to Markdown OCR"
+- Open Settings/Preferences → Tools → "Document Converter"
 - Set your OCR API key (stored securely via PasswordSafe). The settings also include:
-  - Output Mode: Alongside PDF or under a Project Output Root
   - Include images, Combine pages, Open after convert
   - Overwrite policy: Skip Existing, Overwrite, With Suffix
-- Notification group: "PdfOcr"
 
 OCR API
 
-- This plugin uses HTTP calls (OkHttp) to upload and process PDFs.
+- This plugin uses HTTP calls to upload and process PDFs.
 - JSON response format expected from OCR API:
   ```json
   {
@@ -43,10 +41,7 @@ OCR API
     ]
   }
   ```
-- Endpoint configuration: set `-Dpdf.ocr.endpoint=https://your-ocr-endpoint` JVM option when running IDE or set environment `PDF_OCR_ENDPOINT`.
-- Proxy: The client attempts to honor IDE proxy settings.
-- If no endpoint is set or a call fails, the plugin will still generate a stub Markdown file to allow end‑to‑end flow testing.
-
+  
 Usage
 
 1) In the Project tool window, select one or more PDFs or a directory.
@@ -64,7 +59,6 @@ Troubleshooting
 
 - Authentication errors or rate limits: check your API key in Settings.
 - Proxy environments: ensure IDE proxy settings are configured; the plugin attempts to use them.
-- Endpoint missing: set `pdf.ocr.endpoint` system property or `PDF_OCR_ENDPOINT` environment variable.
 
 Manual Test Checklist
 
@@ -73,7 +67,6 @@ Manual Test Checklist
 - Folder selection → recursive discovery
 - Overwrite policy behaviors verified
 - Settings persist across IDE restarts; Test connection indicates basic validation
-- Proxy honored (if configured)
 - You can bind a keyboard shortcut to the action (default example: Ctrl+Alt+M)
 
 Notes

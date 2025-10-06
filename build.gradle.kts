@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "me.akram.bensalem"
-version = "1.0-SNAPSHOT"
+version = "1.0.0"
 
 repositories {
     mavenCentral()
@@ -18,7 +18,6 @@ repositories {
 dependencies {
     intellijPlatform {
         create("IC", "2023.3")
-        // bundledPlugin("com.intellij.java") // add if needed
     }
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0") {
