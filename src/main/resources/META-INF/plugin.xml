@@ -3,11 +3,31 @@
     <name>PDF Converter</name>
     <vendor url="https://example.com">Akram Bensalem</vendor>
     <description><![CDATA[
-        PDF Converter is the first open-source plugin designed to help users convert documents, such as PDFs, into various formats including Markdown and JSON, with more formats planned for the future. Leveraging OCR technology, it enables efficient extraction of content from scanned or image-based documents, making them accessible and easy to process for AI agents and other applications.
-
-         This tool is especially valuable for researchers, developers, educators, PhD candidates and students at all levels, providing a cost-effective alternative to expensive AI subscriptions. It empowers users in regions with limited access to payment methods or where AI services are prohibitively expensive, allowing them to convert documents into AI-friendly formats and pay only for what they use.
-
-         Currently, each user needs their own API key from Mistral AI. However, future updates will introduce an offline mode (completely free, no AI) and an option to use credentials from the Akram platform for people who cannot afford AI services or do not have access to payment methods.
+        <img src="https://raw.githubusercontent.com/username/repository/main/images/logo.png" alt="PDF Converter Logo" width="200"/>
+        
+        Transform your documents effortlessly with PDF Converter, a pioneering open-source plugin that bridges the gap between various document formats. Whether you need to convert PDFs to Markdown, JSON, or other formats (with more on the horizon), this tool has you covered.
+        
+        🔍 Key Features:
+        • Advanced OCR technology for precise content extraction
+        • Support for scanned documents and image-based PDFs
+        • Seamless integration with AI applications
+        • User-friendly interface for efficient document processing
+        
+        🎯 Perfect For:
+        • Researchers and Academics
+        • Software Developers
+        • Educators and Students
+        • PhD Candidates
+        
+        💡 Accessibility First:
+        We believe in making document conversion accessible to everyone. Our tool offers a cost-effective alternative to expensive AI subscriptions, particularly beneficial for users in regions with limited payment options or budget constraints.
+        
+        🔑 Current Requirements:
+        • Mistral AI API key required
+        
+        🚀 Coming Soon:
+        • Offline mode (100% free, no AI needed)
+        • Akram platform integration for credential-free access
     ]]></description>
     <depends>com.intellij.modules.platform</depends>
     <extensions defaultExtensionNs="com.intellij">

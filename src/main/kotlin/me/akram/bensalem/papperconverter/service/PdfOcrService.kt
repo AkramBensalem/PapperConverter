@@ -32,7 +32,7 @@ import java.nio.file.Path
 @Service(Service.Level.PROJECT)
 class PdfOcrService {
     private val log = Logger.getInstance(PdfOcrService::class.java)
-    private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
+    private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
     private val client: HttpClient by lazy {
         HttpClient(OkHttp) {
             install(ContentNegotiation) { json(json) }
