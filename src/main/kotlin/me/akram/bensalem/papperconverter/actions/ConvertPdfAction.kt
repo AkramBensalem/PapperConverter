@@ -53,6 +53,12 @@ class ConvertPdfAction : AnAction() {
 
         val settings = PdfOcrSettingsState.getInstance()
 
+        // Early validation for API key
+        if (!settings.hasApiKey() || settings.apiKey.isBlank()) {
+            Notifications.error(project, "PDF OCR", "API key is not configured. Open Settings/Preferences → Tools → PDF to Markdown OCR and set your API key.")
+            return
+        }
+
         val dialog = ConvertPdfDialog(project, pdfs.size, settings)
         if (!dialog.showAndGet()) return
 
@@ -66,8 +72,10 @@ class ConvertPdfAction : AnAction() {
                 val service = PdfOcrService.getInstance(e.project ?: return)
                 var successCount = 0
                 var failCount = 0
+                var skippedCount = 0
                 val toRefresh = mutableListOf<File>()
                 var firstMd: Path? = null
+                var firstError: String? = null
                 pdfs.forEachIndexed { idx, pdf ->
                     indicator.checkCanceled()
                     indicator.text = "Converting ${pdf.fileName}"
@@ -98,14 +106,36 @@ class ConvertPdfAction : AnAction() {
                                 } catch (ex: Exception) {
                                     log.warn("Failed to move PDF $pdf to $outDir", ex)
                                 }
+                            } else if (result.error == null) {
+                                skippedCount++
+
+                                if (!pdf.parent.equals(outDir)) {
+                                    try {
+                                        val targetPdf = outDir.resolve(pdf.fileName)
+                                        java.nio.file.Files.move(
+                                            pdf,
+                                            targetPdf,
+                                            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                                        )
+                                        toRefresh.add(targetPdf.toFile())
+                                        toRefresh.add(pdf.parent.toFile()) // Refresh source directory
+                                    } catch (ex: Exception) {
+                                        log.warn("Failed to move skipped PDF $pdf to $outDir", ex)
+                                    }
+                                }
+                                
+                                
+                                
                             } else {
                                 failCount++
+                                if (firstError == null) firstError = result.error
                             }
                         }
 
                     } catch (ex: Exception) {
                         log.warn("Failed to OCR $pdf", ex)
                         failCount++
+                        if (firstError == null) firstError = ex.message
                     }
                 }
 
@@ -127,8 +157,15 @@ class ConvertPdfAction : AnAction() {
                     }
                 }
 
-                val content = "Converted: $successCount, Failed: $failCount"
-                if (failCount == 0) Notifications.info(project, "PDF OCR", content) else Notifications.warn(project, "PDF OCR", content)
+                var content = "Converted: $successCount, Failed: $failCount, Skipped: $skippedCount"
+                if (failCount > 0 && firstError != null) {
+                    content += "\nerror: $firstError"
+                }
+                when {
+                    failCount == 0 -> Notifications.info(project, "PDF OCR", content)
+                    successCount == 0 -> Notifications.error(project, "PDF OCR", content)
+                    else -> Notifications.warn(project, "PDF OCR", content)
+                }
             }
         })
     }

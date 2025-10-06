@@ -7,6 +7,9 @@ import com.intellij.openapi.project.Project
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.plugins.ServerResponseException
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
@@ -27,7 +30,11 @@ import me.akram.bensalem.papperconverter.data.response.OcrResponse
 import me.akram.bensalem.papperconverter.data.response.SignedUrlResponse
 import me.akram.bensalem.papperconverter.data.response.UploadResponse
 import me.akram.bensalem.papperconverter.util.IoUtil
+import java.net.ConnectException
+import java.net.UnknownHostException
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLException
 
 @Service(Service.Level.PROJECT)
 class PdfOcrService {
@@ -35,7 +42,16 @@ class PdfOcrService {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
     private val client: HttpClient by lazy {
         HttpClient(OkHttp) {
+            // Basic JSON
             install(ContentNegotiation) { json(json) }
+            // Conservative timeouts to avoid hanging
+            engine {
+                config {
+                    connectTimeout(15, TimeUnit.SECONDS)
+                    readTimeout(60, TimeUnit.SECONDS)
+                    writeTimeout(60, TimeUnit.SECONDS)
+                }
+            }
         }
     }
 
@@ -123,16 +139,34 @@ class PdfOcrService {
             OcrResult(markdownFile = mdFile, jsonFile = jsonFile, imageFiles = imageFiles, createdFiles = created)
         } catch (e: Exception) {
             log.warn("PDF OCR failed for $pdf", e)
-            OcrResult(markdownFile = null, jsonFile = null, imageFiles = emptyList(), createdFiles = emptyList(), error = e.message ?: "Unknown error")
+            OcrResult(
+                markdownFile = null,
+                jsonFile = null,
+                imageFiles = emptyList(),
+                createdFiles = emptyList(),
+                error = friendlyMessage(e)
+            )
         }
     }
 
     private fun joinMarkdown(pages: List<String>, combine: Boolean): String =
         if (combine) pages.joinToString("\n\n") else pages.joinToString("\n\n")
 
+    private suspend fun friendlyMessage(t: Throwable): String {
+        return when (t) {
+            is UnknownHostException -> "No internet or DNS issue. Please check your connection and proxy settings."
+            is ConnectException -> "Could not connect to OCR service. Check your internet connection, proxy, or firewall."
+            is java.net.SocketTimeoutException -> "The request to the OCR service timed out. Please try again."
+            is SSLException -> "Secure connection (SSL) failed. Check your network or proxy certificates."
+            is ClientRequestException -> "Request error ${t.response.status.value}. Please verify your API key and input."
+            is ServerResponseException -> "Server error ${t.response.status.value}. Please try again later."
+            is ResponseException -> "HTTP error ${t.response.status.value}."
+            else -> t.message ?: "Unknown error"
+        }
+    }
 
     private suspend fun runMistralOCR(pdf: Path, options: Options): OcrResponse {
-        if (options.apiKey.isBlank()) throw Exception("API key is empty")
+        if (options.apiKey.isBlank()) throw Exception("API key is missing. Set it in Settings/Preferences → Tools → PDF to Markdown OCR.")
         return try {
                 val upload: UploadResponse = uploadFile(pdf, options.apiKey)
                 val document: SignedUrlResponse = signUrl(upload.id, options.apiKey)
@@ -149,15 +183,17 @@ class PdfOcrService {
     }
 
     suspend fun testConnection(apiKey: String): TestResult {
-        if (apiKey.isBlank()) return TestResult(false, "API key is empty")
-
-        val resp = client.get("$base/v1/models") {
+        if (apiKey.isBlank()) return TestResult(false, "API key is missing. Set it in Settings/Preferences → Tools → PDF to Markdown OCR.")
+        return try {
+            val resp = client.get("$base/v1/models") {
                 headers { append(HttpHeaders.Authorization, "Bearer $apiKey") }
             }
-
-        val ok = resp.status.value in 200..299
-
-        return if (ok) TestResult(true, "Connection OK ${resp.status.value}") else TestResult(false, "HTTP error ${resp.status.value} ${resp.body<String>()}")
+            val ok = resp.status.value in 200..299
+            if (ok) TestResult(true, "Connection OK ${resp.status.value}") else TestResult(false, "HTTP error ${resp.status.value}")
+        } catch (e: Exception) {
+            log.warn("Test connection failed", e)
+            TestResult(false, friendlyMessage(e))
+        }
     }
 
     companion object {
