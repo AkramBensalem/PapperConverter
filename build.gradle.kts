@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "me.akram.bensalem"
-version = "1.0.0"
+version = "0.0.1"
 
 repositories {
     mavenCentral()
@@ -17,7 +17,7 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        create("IC", "2023.3")
+        create("IC", "2024.3.3")
     }
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0") {
@@ -45,7 +45,7 @@ dependencies {
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "233"
+            sinceBuild = "243"
         }
         changeNotes = """
             Initial version
@@ -72,5 +72,8 @@ tasks {
     }
     test {
         useJUnitPlatform()
+    }
+    buildSearchableOptions {
+        enabled = false
     }
 }
