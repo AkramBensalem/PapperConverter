@@ -23,6 +23,8 @@ class PdfOcrConfigurable : Configurable {
     private lateinit var outputJson: JCheckBox
     private lateinit var overwritePolicyCombo: JComboBox<String>
     private lateinit var testButton: JButton
+    private lateinit var offlineRadio: JRadioButton
+    private lateinit var mistralRadio: JRadioButton
 
     override fun getDisplayName(): String = "PDF to Markdown OCR"
 
@@ -36,25 +38,60 @@ class PdfOcrConfigurable : Configurable {
             outputMarkdown = JCheckBox("Output Markdown")
             outputJson = JCheckBox("Output JSON")
             overwritePolicyCombo = ComboBox(PdfOcrSettingsState.OverwritePolicy.options)
+            offlineRadio = JRadioButton("Offline")
+            mistralRadio = JRadioButton("Mistral AI")
+            val group = ButtonGroup().apply {
+                add(offlineRadio)
+                add(mistralRadio)
+            }
+
+            val modeInfo = JBLabel("<html>Offline mode uses Microsoft MarkItDown to extract content locally.</html>")
 
             val leftColumn = JPanel(GridBagLayout()).apply {
                 val gbc = GridBagConstraints()
 
+                // Mode label
                 gbc.gridx = 0
                 gbc.gridy = 0
                 gbc.anchor = GridBagConstraints.WEST
                 gbc.insets = JBUI.insetsRight(10)
-                add(JBLabel("API Key:"), gbc)
+                add(JBLabel("Mode:"), gbc)
 
+                // Mode radios panel
+                val modePanel = JPanel().apply {
+                    layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                    add(offlineRadio)
+                    add(mistralRadio)
+                    add(Box.createVerticalStrut(4))
+                    add(modeInfo)
+                }
                 gbc.gridx = 1
                 gbc.gridy = 0
                 gbc.weightx = 1.0
                 gbc.fill = GridBagConstraints.HORIZONTAL
                 gbc.insets = JBUI.insetsBottom(8)
-                add(apiKeyField, gbc)
+                add(modePanel, gbc)
 
+                // API Key label
+                gbc.gridx = 0
+                gbc.gridy = 1
+                gbc.weightx = 0.0
+                gbc.fill = GridBagConstraints.NONE
+                gbc.anchor = GridBagConstraints.WEST
+                gbc.insets = JBUI.insetsRight(10)
+                add(JBLabel("API Key:"), gbc)
+
+                // API Key field
                 gbc.gridx = 1
                 gbc.gridy = 1
+                gbc.weightx = 1.0
+                gbc.fill = GridBagConstraints.HORIZONTAL
+                gbc.insets = JBUI.insetsBottom(8)
+                add(apiKeyField, gbc)
+
+                // Test button
+                gbc.gridx = 1
+                gbc.gridy = 2
                 gbc.weightx = 0.0
                 gbc.fill = GridBagConstraints.NONE
                 gbc.anchor = GridBagConstraints.WEST
@@ -88,6 +125,15 @@ class PdfOcrConfigurable : Configurable {
                 gbc.insets = JBUI.emptyInsets()
                 add(rightColumn, gbc)
             }
+
+            fun updateApiKeyControlsEnabled() {
+                val mistral = mistralRadio.isSelected
+                apiKeyField.isEnabled = mistral
+                testButton.isEnabled = mistral
+            }
+
+            offlineRadio.addActionListener { updateApiKeyControlsEnabled() }
+            mistralRadio.addActionListener { updateApiKeyControlsEnabled() }
 
             testButton.addActionListener {
                 val s = PdfOcrSettingsState.getInstance()
@@ -140,7 +186,11 @@ class PdfOcrConfigurable : Configurable {
             typed.isEmpty() -> s.hasApiKey()
             else -> true
         }
-        return keyChanged ||
+        val modeChanged = when (s.state.mode) {
+            PdfOcrSettingsState.OcrMode.Offline -> !offlineRadio.isSelected
+            PdfOcrSettingsState.OcrMode.Mistral -> !mistralRadio.isSelected
+        }
+        return keyChanged || modeChanged ||
                 includeImages.isSelected != s.state.includeImages ||
                 combinePages.isSelected != s.state.combinePages ||
                 openAfter.isSelected != s.state.openAfterConvert ||
@@ -165,6 +215,8 @@ class PdfOcrConfigurable : Configurable {
         // Reflect masked or empty state in the UI field after applying
         apiKeyField.text = if (s.hasApiKey()) "********" else ""
 
+        val newMode = if (mistralRadio.isSelected) PdfOcrSettingsState.OcrMode.Mistral else PdfOcrSettingsState.OcrMode.Offline
+
         s.loadState(
             s.state.copy(
                 includeImages = includeImages.isSelected,
@@ -173,6 +225,7 @@ class PdfOcrConfigurable : Configurable {
                 outputMarkdown = outputMarkdown.isSelected,
                 outputJson = outputJson.isSelected,
                 overwritePolicy = PdfOcrSettingsState.OverwritePolicy.entries[overwritePolicyCombo.selectedIndex],
+                mode = newMode,
             )
         )
     }
@@ -186,6 +239,15 @@ class PdfOcrConfigurable : Configurable {
         outputMarkdown.isSelected = s.state.outputMarkdown
         outputJson.isSelected = s.state.outputJson
         overwritePolicyCombo.selectedIndex = s.state.overwritePolicy.ordinal
+
+        // Mode selection
+        when (s.state.mode) {
+            PdfOcrSettingsState.OcrMode.Offline -> offlineRadio.isSelected = true
+            PdfOcrSettingsState.OcrMode.Mistral -> mistralRadio.isSelected = true
+        }
+        // Enable/disable API key controls accordingly
+        apiKeyField.isEnabled = s.state.mode == PdfOcrSettingsState.OcrMode.Mistral
+        testButton.isEnabled = s.state.mode == PdfOcrSettingsState.OcrMode.Mistral
     }
 
     override fun disposeUIResources() {

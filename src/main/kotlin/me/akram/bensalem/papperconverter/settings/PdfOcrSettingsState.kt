@@ -21,6 +21,7 @@ class PdfOcrSettingsState : PersistentStateComponent<PdfOcrSettingsState.State> 
         var overwritePolicy: OverwritePolicy = OverwritePolicy.WithSuffix,
         var outputMarkdown: Boolean = true,
         var outputJson: Boolean = true,
+        var mode: OcrMode = OcrMode.Offline,
     )
 
     enum class OverwritePolicy(
@@ -35,6 +36,11 @@ class PdfOcrSettingsState : PersistentStateComponent<PdfOcrSettingsState.State> 
                 get() = entries.map { it.displayName }.toTypedArray()
         }
 
+    }
+
+    enum class OcrMode {
+        Offline,
+        Mistral
     }
 
     private var state = State()

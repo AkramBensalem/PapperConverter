@@ -38,6 +38,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 
+    // GraalPy for offline PDF processing with MarkItDown
+    implementation("org.graalvm.polyglot:polyglot:24.0.0")
+    implementation("org.graalvm.polyglot:python:24.0.0")
+
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
 }

@@ -53,8 +53,8 @@ class ConvertPdfAction : AnAction() {
 
         val settings = PdfOcrSettingsState.getInstance()
 
-        // Early validation for API key
-        if (!settings.hasApiKey() || settings.apiKey.isBlank()) {
+        // Early validation for API key only if Mistral mode is selected
+        if (settings.state.mode == PdfOcrSettingsState.OcrMode.Mistral && (!settings.hasApiKey() || settings.apiKey.isBlank())) {
             Notifications.error(project, "PDF OCR", "API key is not configured. Open Settings/Preferences → Tools → PDF to Markdown OCR and set your API key.")
             return
         }
@@ -86,6 +86,7 @@ class ConvertPdfAction : AnAction() {
                             includeImages = settings.state.includeImages,
                             combinePages = settings.state.combinePages,
                             overwritePolicy = overwritePolicy,
+                            mode = settings.state.mode,
                             apiKey = settings.apiKey,
                             outputMarkdown = outputMarkdown,
                             outputJson = outputJson
