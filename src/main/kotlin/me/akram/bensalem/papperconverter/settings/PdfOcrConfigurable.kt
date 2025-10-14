@@ -25,6 +25,8 @@ class PdfOcrConfigurable : Configurable {
     private lateinit var testButton: JButton
     private lateinit var offlineRadio: JRadioButton
     private lateinit var mistralRadio: JRadioButton
+    private lateinit var markitdownCmdField: JTextField
+    private lateinit var checkMarkitdownButton: JButton
 
     override fun getDisplayName(): String = "PDF to Markdown OCR"
 
@@ -45,7 +47,10 @@ class PdfOcrConfigurable : Configurable {
                 add(mistralRadio)
             }
 
-            val modeInfo = JBLabel("<html>Offline mode uses Microsoft MarkItDown to extract content locally.</html>")
+            markitdownCmdField = JTextField(30)
+            checkMarkitdownButton = JButton("Check MarkItDown")
+
+            val modeInfo = JBLabel("<html>Offline mode uses the MarkItDown CLI to extract content locally.<br/>Provide the command path below or ensure it is on PATH. You can verify using the Check button. Example install: <code>pip install markitdown[all]</code>.</html>")
 
             val leftColumn = JPanel(GridBagLayout()).apply {
                 val gbc = GridBagConstraints()
@@ -130,6 +135,10 @@ class PdfOcrConfigurable : Configurable {
                 val mistral = mistralRadio.isSelected
                 apiKeyField.isEnabled = mistral
                 testButton.isEnabled = mistral
+
+                val offline = offlineRadio.isSelected
+                markitdownCmdField.isEnabled = offline
+                checkMarkitdownButton.isEnabled = offline
             }
 
             offlineRadio.addActionListener { updateApiKeyControlsEnabled() }
@@ -156,6 +165,36 @@ class PdfOcrConfigurable : Configurable {
                 }
             }
 
+            checkMarkitdownButton.addActionListener {
+                val cmd = markitdownCmdField.text.trim()
+                if (cmd.isEmpty()) {
+                    Messages.showErrorDialog("Please enter the MarkItDown command or full path.", "PDF OCR")
+                } else {
+                    val project = ProjectManager.getInstance().openProjects.firstOrNull()
+                    if (project != null) {
+                        val result = PdfOcrService.getInstance(project).checkMarkItDown(cmd)
+                        if (!result.ok) {
+                            Messages.showErrorDialog(result.message, "PDF OCR")
+                        } else {
+                            Messages.showInfoMessage(result.message, "PDF OCR")
+                        }
+                    } else {
+                        try {
+                            val proc = ProcessBuilder(cmd, "--version").redirectErrorStream(true).start()
+                            val out = proc.inputStream.bufferedReader().use { it.readText() }.trim()
+                            val exit = proc.waitFor()
+                            if (exit == 0) {
+                                Messages.showInfoMessage(if (out.isNotBlank()) out else "MarkItDown detected", "PDF OCR")
+                            } else {
+                                Messages.showErrorDialog(out.ifBlank { "Failed to run MarkItDown" }, "PDF OCR")
+                            }
+                        } catch (e: Exception) {
+                            Messages.showErrorDialog("Failed to run MarkItDown: ${e.message}", "PDF OCR")
+                        }
+                    }
+                }
+            }
+
             val outputFormatPanel = JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
                 add(outputMarkdown)
@@ -163,8 +202,17 @@ class PdfOcrConfigurable : Configurable {
                 add(outputJson)
             }
 
+            val markitdownPanel = JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+                add(markitdownCmdField)
+                add(Box.createHorizontalStrut(8))
+                add(checkMarkitdownButton)
+            }
+
             panel = FormBuilder.createFormBuilder()
                 .addComponent(topRow)
+                .addVerticalGap(10)
+                .addLabeledComponent(JBLabel("MarkItDown command:"), markitdownPanel)
                 .addVerticalGap(15)
                 .addLabeledComponent(JBLabel("Overwrite Policy:"), overwritePolicyCombo)
                 .addVerticalGap(10)
@@ -196,7 +244,8 @@ class PdfOcrConfigurable : Configurable {
                 openAfter.isSelected != s.state.openAfterConvert ||
                 outputMarkdown.isSelected != s.state.outputMarkdown ||
                 outputJson.isSelected != s.state.outputJson ||
-                overwritePolicyCombo.selectedIndex != s.state.overwritePolicy.ordinal
+                overwritePolicyCombo.selectedIndex != s.state.overwritePolicy.ordinal ||
+                markitdownCmdField.text.trim() != s.state.markitdownCmd
     }
 
     override fun apply() {
@@ -226,6 +275,7 @@ class PdfOcrConfigurable : Configurable {
                 outputJson = outputJson.isSelected,
                 overwritePolicy = PdfOcrSettingsState.OverwritePolicy.entries[overwritePolicyCombo.selectedIndex],
                 mode = newMode,
+                markitdownCmd = markitdownCmdField.text.trim(),
             )
         )
     }
@@ -248,6 +298,12 @@ class PdfOcrConfigurable : Configurable {
         // Enable/disable API key controls accordingly
         apiKeyField.isEnabled = s.state.mode == PdfOcrSettingsState.OcrMode.Mistral
         testButton.isEnabled = s.state.mode == PdfOcrSettingsState.OcrMode.Mistral
+
+        // MarkItDown command
+        markitdownCmdField.text = s.state.markitdownCmd
+        val offline = s.state.mode == PdfOcrSettingsState.OcrMode.Offline
+        markitdownCmdField.isEnabled = offline
+        checkMarkitdownButton.isEnabled = offline
     }
 
     override fun disposeUIResources() {

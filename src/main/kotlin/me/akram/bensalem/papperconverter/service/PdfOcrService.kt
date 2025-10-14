@@ -37,9 +37,7 @@ class PdfOcrService {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
     private val client: HttpClient by lazy {
         HttpClient(OkHttp) {
-            // Basic JSON
             install(ContentNegotiation) { json(json) }
-            // Conservative timeouts to avoid hanging
             engine {
                 config {
                     connectTimeout(15, TimeUnit.SECONDS)
@@ -85,59 +83,32 @@ class PdfOcrService {
     }
 
     /**
-     * Converts PDF to Markdown using GraalPy + MarkItDown (offline mode)
+     * Converts PDF to Markdown using external MarkItDown CLI (offline mode)
      */
     private fun runOfflineConversion(pdf: Path, targetDir: Path, options: Options): OcrResult {
         try {
-            log.info("Starting offline PDF conversion with MarkItDown for: $pdf")
+            log.info("Starting offline PDF conversion via MarkItDown CLI for: $pdf")
 
-            val pdfPath = pdf.toAbsolutePath().toString().replace("\\", "\\\\")
+            val settings = me.akram.bensalem.papperconverter.settings.PdfOcrSettingsState.getInstance().state
+            val cmd = settings.markitdownCmd.ifBlank { "markitdown" }
+            val pdfPath = pdf.toAbsolutePath().toString()
             val stem = pdf.fileName.toString().substringBeforeLast('.')
             val created = mutableListOf<Path>()
 
-            // Create GraalPy context
-            val context = Context.newBuilder("python")
-                .allowIO(true)
-                .allowAllAccess(true)
-                .option("python.ForceImportSite", "false")
-                .build()
+            val process = ProcessBuilder(cmd, pdfPath)
+                .redirectErrorStream(false)
+                .start()
 
-            // Python code to run MarkItDown
-            val pythonCode = """
-failed = False
-try:
-    from markitdown import MarkItDown
-except ImportError:
-    try:
-        import sys, subprocess
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "markitdown[all]"])
-        from markitdown import MarkItDown
-    except Exception as e:
-        print("ERROR:MarkItDown library not found and installation failed. Try: pip install markitdown[all]. Reason: " + str(e))
-        failed = True
+            val stdout = process.inputStream.bufferedReader().use { it.readText() }
+            val stderr = process.errorStream.bufferedReader().use { it.readText() }
+            val exit = process.waitFor()
 
-if not failed:
-    try:
-        md = MarkItDown()
-        result = md.convert("$pdfPath")
-        print("SUCCESS:" + result.text_content)
-    except Exception as e:
-        print("ERROR:" + str(e))
-""".trimIndent()
-
-            log.info("Executing MarkItDown conversion via GraalPy")
-            val output = context.eval("python", pythonCode).toString()
-            context.close()
-
-            // Parse the output
-            if (output.startsWith("SUCCESS:")) {
-                val markdownContent = output.removePrefix("SUCCESS:")
-
+            if (exit == 0) {
                 // Write Markdown if enabled
                 var mdFile: Path? = null
                 if (options.outputMarkdown) {
                     val mdTarget = targetDir.resolve("$stem.md")
-                    mdFile = IoUtil.writeText(mdTarget, markdownContent, options.overwritePolicy)
+                    mdFile = IoUtil.writeText(mdTarget, stdout, options.overwritePolicy)
                     if (mdFile != null) created.add(mdFile)
                 }
 
@@ -147,34 +118,25 @@ if not failed:
                     imageFiles = emptyList(),
                     createdFiles = created
                 )
-            } else if (output.startsWith("ERROR:")) {
-                val errorMsg = output.removePrefix("ERROR:")
-                log.warn("MarkItDown conversion failed: $errorMsg")
-                return OcrResult(
-                    markdownFile = null,
-                    jsonFile = null,
-                    imageFiles = emptyList(),
-                    createdFiles = emptyList(),
-                    error = "Offline conversion failed: $errorMsg"
-                )
             } else {
-                log.warn("Unexpected output from MarkItDown: $output")
+                val msg = (stderr.ifBlank { stdout }).trim()
+                log.warn("MarkItDown CLI failed (exit $exit): $msg")
                 return OcrResult(
                     markdownFile = null,
                     jsonFile = null,
                     imageFiles = emptyList(),
                     createdFiles = emptyList(),
-                    error = "Unexpected output from MarkItDown converter\n $output"
+                    error = "Offline conversion failed: MarkItDown CLI exited with code $exit.\n$msg"
                 )
             }
-        } catch (e: PolyglotException) {
-            log.warn("GraalPy execution failed", e)
+        } catch (e: java.io.IOException) {
+            log.warn("MarkItDown CLI not found or failed to start", e)
             return OcrResult(
                 markdownFile = null,
                 jsonFile = null,
                 imageFiles = emptyList(),
                 createdFiles = emptyList(),
-                error = "Python execution failed: ${e.message}\n\nPlease ensure MarkItDown is installed: pip install markitdown"
+                error = "MarkItDown CLI not found. Please install it and ensure it's available on PATH, or set its full path in Settings (Tools → PDF to Markdown OCR). Details: ${e.message}"
             )
         } catch (e: Exception) {
             log.warn("Offline conversion failed", e)
@@ -308,6 +270,25 @@ if not failed:
         } catch (e: Exception) {
             log.warn("Test connection failed", e)
             TestResult(false, friendlyMessage(e))
+        }
+    }
+
+    fun checkMarkItDown(cmd: String): TestResult {
+        return try {
+            val process = ProcessBuilder(cmd, "--version")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+            val exit = process.waitFor()
+            if (exit == 0 && output.isNotBlank()) {
+                TestResult(true, output)
+            } else {
+                TestResult(false, if (output.isNotBlank()) output else "Unknown error running MarkItDown")
+            }
+        } catch (e: java.io.IOException) {
+            TestResult(false, "MarkItDown CLI not found. Please install it and ensure it's on PATH, or set its full path. Details: ${e.message}")
+        } catch (e: Exception) {
+            TestResult(false, "Failed to run MarkItDown: ${e.message}")
         }
     }
 

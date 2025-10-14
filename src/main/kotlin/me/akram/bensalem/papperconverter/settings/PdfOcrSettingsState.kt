@@ -22,6 +22,7 @@ class PdfOcrSettingsState : PersistentStateComponent<PdfOcrSettingsState.State> 
         var outputMarkdown: Boolean = true,
         var outputJson: Boolean = true,
         var mode: OcrMode = OcrMode.Offline,
+        var markitdownCmd: String = "markitdown",
     )
 
     enum class OverwritePolicy(
